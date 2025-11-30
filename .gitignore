@@ -1,1 +1,4 @@
 .claude
+
+# sqlc
+internal/adapters/postgresql/sqlc/*.go
