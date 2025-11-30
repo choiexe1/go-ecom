@@ -18,18 +18,10 @@ import (
 func (app *application) mount() http.Handler {
 	r := chi.NewRouter()
 
-	// Middlewares
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-
-	// Set a timeout value on the request context (ctx), that will signal
-	// through the ctx.Done() channel a time limit for the request.
-	// processing should be complete.
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
-	})
 
 	queries := repo.New(app.db)
 
@@ -37,15 +29,28 @@ func (app *application) mount() http.Handler {
 	productService := products.NewService(productRepo)
 	productHandler := products.NewHandler(productService)
 
-	r.Get("/products", productHandler.ListProduct)
-	r.Get("/products/{id}", productHandler.FindProductByID)
-	r.Post("/products", productHandler.CreateProduct)
-
 	ordersRepo := ordersPostgres.NewRepository(queries, app.db)
 	ordersService := orders.NewService(ordersRepo)
 	ordersHandler := orders.NewHandler(ordersService)
 
-	r.Post("/order", ordersHandler.PlaceOrder)
+	r.Route("/v1", func(r chi.Router) {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("ok"))
+		})
+
+		r.Route("/products", func(r chi.Router) {
+			r.Get("/", productHandler.ListProduct)
+			r.Post("/", productHandler.CreateProduct)
+
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", productHandler.FindProductByID)
+			})
+		})
+
+		r.Route("/orders", func(r chi.Router) {
+			r.Post("/", ordersHandler.PlaceOrder)
+		})
+	})
 
 	return r
 }
