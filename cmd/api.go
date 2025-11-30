@@ -7,7 +7,9 @@ import (
 
 	repo "github.com/choiexe1/go-ecom/internal/adapters/postgresql/sqlc"
 	"github.com/choiexe1/go-ecom/internal/orders"
+	ordersPostgres "github.com/choiexe1/go-ecom/internal/orders/postgres"
 	"github.com/choiexe1/go-ecom/internal/products"
+	productsPostgres "github.com/choiexe1/go-ecom/internal/products/postgres"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
@@ -29,13 +31,18 @@ func (app *application) mount() http.Handler {
 		w.Write([]byte("ok"))
 	})
 
-	productService := products.NewService(repo.New(app.db))
+	queries := repo.New(app.db)
+
+	productRepo := productsPostgres.NewRepository(queries)
+	productService := products.NewService(productRepo)
 	productHandler := products.NewHandler(productService)
 
 	r.Get("/products", productHandler.ListProduct)
 	r.Get("/products/{id}", productHandler.FindProductByID)
+	r.Post("/products", productHandler.CreateProduct)
 
-	ordersService := orders.NewService(repo.New(app.db), app.db)
+	ordersRepo := ordersPostgres.NewRepository(queries, app.db)
+	ordersService := orders.NewService(ordersRepo)
 	ordersHandler := orders.NewHandler(ordersService)
 
 	r.Post("/order", ordersHandler.PlaceOrder)

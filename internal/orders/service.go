@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
-
-	repo "github.com/choiexe1/go-ecom/internal/adapters/postgresql/sqlc"
+	"github.com/choiexe1/go-ecom/internal/products"
 )
 
 var (
@@ -16,82 +14,84 @@ var (
 )
 
 type svc struct {
-	repo *repo.Queries
-	db   *pgx.Conn
+	repo Repository
 }
 
-func NewService(repo *repo.Queries, db *pgx.Conn) Service {
+func NewService(repo Repository) Service {
 	return &svc{
 		repo: repo,
-		db:   db,
 	}
 }
 
-func (s *svc) PlaceOrder(ctx context.Context, tempOrder createOrderParams) (PlaceOrderResponse, error) {
-	if tempOrder.CustomerID == 0 {
+func (s *svc) PlaceOrder(ctx context.Context, params CreateOrderParams) (PlaceOrderResponse, error) {
+	if params.CustomerID == 0 {
 		return PlaceOrderResponse{}, fmt.Errorf("customer ID is required")
 	}
-	if len(tempOrder.Items) == 0 {
+	if len(params.Items) == 0 {
 		return PlaceOrderResponse{}, fmt.Errorf("at least one item is required")
 	}
 
-	tx, err := s.db.Begin(ctx)
+	var response PlaceOrderResponse
+
+	err := s.repo.WithTx(func(tx TxRepository) error {
+		order, err := tx.CreateOrder(ctx, params.CustomerID)
+		if err != nil {
+			return err
+		}
+
+		var orderItems []OrderItem
+		var totalPrice int32
+
+		for _, item := range params.Items {
+			product, err := tx.GetProductByID(ctx, item.ProductID)
+			if err != nil {
+				return ErrProductNotFound
+			}
+
+			if product.Quantity < item.Quantity {
+				return ErrProductNoStock
+			}
+
+			newQuantity := product.Quantity - item.Quantity
+			if newQuantity < 0 {
+				newQuantity = 0
+			}
+
+			orderItem, err := tx.CreateOrderItem(ctx, CreateOrderItemParams{
+				OrderID:    order.ID,
+				ProductID:  item.ProductID,
+				Quantity:   item.Quantity,
+				PriceCents: product.PriceCents,
+			})
+			if err != nil {
+				return err
+			}
+
+			orderItems = append(orderItems, orderItem)
+			totalPrice += orderItem.PriceCents * orderItem.Quantity
+
+			_, err = tx.UpdateProduct(ctx, products.UpdateProductParams{
+				ID:         item.ProductID,
+				Name:       product.Name,
+				PriceCents: product.PriceCents,
+				Quantity:   newQuantity,
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+		response = PlaceOrderResponse{
+			Order:      order,
+			Items:      orderItems,
+			TotalPrice: totalPrice,
+		}
+		return nil
+	})
+
 	if err != nil {
 		return PlaceOrderResponse{}, err
 	}
-	defer tx.Rollback(ctx)
 
-	qtx := s.repo.WithTx(tx)
-
-	order, err := qtx.CreateOrder(ctx, tempOrder.CustomerID)
-	if err != nil {
-		return PlaceOrderResponse{}, err
-	}
-
-	var orderItems []repo.OrderItem
-	var totalPrice int32
-
-	for _, item := range tempOrder.Items {
-		product, err := qtx.GetProductByID(ctx, item.ProductID)
-		if err != nil {
-			return PlaceOrderResponse{}, ErrProductNotFound
-		}
-
-		if product.Quantity < item.Quantity {
-			return PlaceOrderResponse{}, ErrProductNoStock
-		}
-
-		product.Quantity = product.Quantity - item.Quantity
-
-		if product.Quantity < 0 {
-			product.Quantity = 0
-		}
-
-		orderItem, err := qtx.CreateOrderItem(ctx, repo.CreateOrderItemParams{
-			OrderID:    order.ID,
-			ProductID:  item.ProductID,
-			Quantity:   item.Quantity,
-			PriceCents: product.PriceCents,
-		})
-		if err != nil {
-			return PlaceOrderResponse{}, err
-		}
-		orderItems = append(orderItems, orderItem)
-		totalPrice += orderItem.PriceCents * orderItem.Quantity
-
-		qtx.UpdateProduct(ctx, repo.UpdateProductParams{
-			ID:         item.ProductID,
-			Name:       product.Name,
-			PriceCents: product.PriceCents,
-			Quantity:   product.Quantity,
-		})
-	}
-
-	tx.Commit(ctx)
-
-	return PlaceOrderResponse{
-		Order:      order,
-		Items:      orderItems,
-		TotalPrice: totalPrice,
-	}, nil
+	return response, nil
 }

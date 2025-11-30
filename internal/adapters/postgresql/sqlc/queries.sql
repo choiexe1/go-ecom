@@ -1,5 +1,9 @@
 -- name: ListProducts :many
- SELECT * FROM products;
+SELECT * FROM products;
+
+-- name: CreateProduct :one
+INSERT INTO products (name, price_cents, quantity)
+VALUES ($1, $2, $3) RETURNING *;
 
 -- name: GetProductByID :one
  SELECT * FROM products WHERE id = $1;

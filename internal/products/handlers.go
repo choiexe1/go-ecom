@@ -46,3 +46,22 @@ func (h *handler) FindProductByID(w http.ResponseWriter, r *http.Request) {
 
 	json.Write(w, http.StatusOK, product)
 }
+
+func (h *handler) CreateProduct(w http.ResponseWriter, r *http.Request) {
+	var params CreateProductParams
+
+	if err := json.Read(r, &params); err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	product, err := h.service.CreateProduct(r.Context(), params)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.Write(w, http.StatusCreated, product)
+}

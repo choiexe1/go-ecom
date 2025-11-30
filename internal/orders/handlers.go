@@ -18,7 +18,7 @@ func NewHandler(s Service) *handler {
 }
 
 func (h *handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
-	var order createOrderParams
+	var order CreateOrderParams
 
 	if err := json.Read(r, &order); err != nil {
 		log.Println(err)
