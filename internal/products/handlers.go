@@ -3,8 +3,10 @@ package products
 import (
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/choiexe1/go-ecom/internal/json"
+	"github.com/go-chi/chi/v5"
 )
 
 type handler struct {
@@ -18,16 +20,29 @@ func NewHandler(s Service) *handler {
 }
 
 func (h *handler) ListProduct(w http.ResponseWriter, r *http.Request) {
-	// 1. Call service -> ListProducts
-	// 2. Return JSON in an HTTP Response
-
 	products, err := h.service.ListProducts(r.Context())
-
 	if err != nil {
 		log.Println(err)
-		http.Error(w, error.Error(err), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	json.Write(w, http.StatusOK, products)
+}
+
+func (h *handler) FindProductByID(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid product ID", http.StatusBadRequest)
+		return
+	}
+
+	product, err := h.service.GetProductByID(r.Context(), id)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.Write(w, http.StatusOK, product)
 }

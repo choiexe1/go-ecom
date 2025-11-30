@@ -32,6 +32,7 @@ func (app *application) mount() http.Handler {
 	productHandler := products.NewHandler(productService)
 
 	r.Get("/products", productHandler.ListProduct)
+	r.Get("/products/{id}", productHandler.FindProductByID)
 
 	return r
 }
