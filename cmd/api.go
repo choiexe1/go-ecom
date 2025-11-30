@@ -6,6 +6,7 @@ import (
 	"time"
 
 	repo "github.com/choiexe1/go-ecom/internal/adapters/postgresql/sqlc"
+	"github.com/choiexe1/go-ecom/internal/orders"
 	"github.com/choiexe1/go-ecom/internal/products"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -33,6 +34,11 @@ func (app *application) mount() http.Handler {
 
 	r.Get("/products", productHandler.ListProduct)
 	r.Get("/products/{id}", productHandler.FindProductByID)
+
+	ordersService := orders.NewService(repo.New(app.db), app.db)
+	ordersHandler := orders.NewHandler(ordersService)
+
+	r.Post("/order", ordersHandler.PlaceOrder)
 
 	return r
 }
