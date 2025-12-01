@@ -21,3 +21,18 @@ VALUES ($1, $2, $3, $4) RETURNING *;
 UPDATE products
 SET name = $2, price_cents = $3, quantity = $4
 WHERE id = $1 RETURNING *;
+
+-- name: CreateUser :one
+INSERT INTO users (username, password, role)
+VALUES ($1, $2, $3) RETURNING *;
+
+-- name: GetUserByID :one
+SELECT * FROM users WHERE id = $1;
+
+-- name: ListUsers :many
+SELECT * FROM users;
+
+-- name: UpdateUser :one
+UPDATE users
+SET password = $2, role = $3, is_active = $4, updated_at = NOW()
+WHERE id = $1 RETURNING *;
